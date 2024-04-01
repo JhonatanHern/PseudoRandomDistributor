@@ -12,6 +12,7 @@ The Investment Manager contract is a Solidity contract that manages pseudo-rando
   - `minimumDailyAmount`: The minimum daily amount for an approved round.
   - `maximumDailyAmount`: The maximum daily amount for an approved round.
   - `withdrawChance`: The chance of withdrawing, expressed as "withdrawChance in 1000".
+  - `initialMaximumDailyAmount`: The maximum daily amount for the initial round.
   - `claimedBlockIndexes`: A mapping of the indexes of the already claimed blocks.
 
 ### State Variables
@@ -20,10 +21,12 @@ The Investment Manager contract is a Solidity contract that manages pseudo-rando
 - `marketMaker`: The address of the market maker.
 - `investmentToken`: The ERC20 token used for the investment.
 - `investmentRound`: The current investment round.
+- `roundReplacementCounter`: It increases every time `resetInvestmentRound` is called. This allows to validate claimed blocks after rounds resets.
 
 ### Events
 
 - `Withdrawal`: Emitted when a withdrawal is made. It includes the block counter and the amount withdrawn.
+- `RoundReset`: Emitted when the investment round is reset. It includes the new round counter and the parameters of the new round.
 
 ### Functions
 
@@ -32,6 +35,7 @@ The Investment Manager contract is a Solidity contract that manages pseudo-rando
 - `randomAmountBasedOnBlock`: Calculates if tokens are to be withdrawn based on a specific block and how many tokens should be withdrawn.
 - `withdraw`: Allows the market maker to withdraw tokens for selected blocks. Emits a `Withdrawal` event.
 - `isBlockAvailable`: Checks if a block is available for withdrawal.
+- `resetInvestmentRound`: Resets the current investment round with new parameters. This function can be used to change the parameters of the current round or to pause the contract by providing an extremely large block interval. Can only be called by the investor.
 - `getBlockHash`: Gets the hash of a specific block. This is a testing helper function.
 
 ## Mock Trader Contract
