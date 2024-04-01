@@ -12,15 +12,26 @@ contract InvestmentManager {
         uint256 minimumDailyAmount; // The minimum daily amount for an approved round.
         uint256 maximumDailyAmount; // The maximum daily amount for an approved round.
         uint256 withdrawChance; // The chance of withdrawing, expressed as "withdrawChance in 1000".
-        mapping(uint => bool) claimedBlockIndexes; // The indexes of the already claimed blocks.
+        mapping(uint => mapping(uint => bool)) claimedBlockIndexes; // The indexes of the already claimed blocks.
     }
 
     address public immutable investor; // The address of the investor.
     address public immutable marketMaker; // The address of the market maker.
     IERC20 public immutable investmentToken; // The ERC20 token used for the investment.
     InvestmentRound public investmentRound; // The current investment round.
+    // It increases every time resetInvestmentRound is called. This allows to validate claimed blocks after rounds resets.
+    // https://docs.soliditylang.org/en/develop/types.html#:~:text=delete%20has%20no%20effect%20on%20mappings
+    uint256 public roundReplacementCounter;
 
     event Withdrawal(uint256 blockCounter, uint256 amount);
+
+    event RoundReset(
+        uint256 newRoundCounter,
+        uint256 blockInterval,
+        uint256 minimumDailyAmount,
+        uint256 maximumDailyAmount,
+        uint256 withdrawChance
+    );
 
     /// @notice Contract constructor.
     /// @param _investor The address of the investor.
@@ -122,10 +133,14 @@ contract InvestmentManager {
         );
         require(blockCounter >= 1, "blockCounter must be >= 1");
         require(
-            !investmentRound.claimedBlockIndexes[blockCounter],
+            !investmentRound.claimedBlockIndexes[roundReplacementCounter][
+                blockCounter
+            ],
             "Block already claimed"
         );
-        investmentRound.claimedBlockIndexes[blockCounter] = true;
+        investmentRound.claimedBlockIndexes[roundReplacementCounter][
+            blockCounter
+        ] = true;
 
         uint256 contractBalance = investmentToken.balanceOf(address(this));
 
@@ -157,7 +172,11 @@ contract InvestmentManager {
     function isBlockAvailable(
         uint256 blockCounter
     ) public view returns (uint256) {
-        if (investmentRound.claimedBlockIndexes[blockCounter]) {
+        if (
+            investmentRound.claimedBlockIndexes[roundReplacementCounter][
+                blockCounter
+            ]
+        ) {
             return 0;
         }
         return
@@ -167,6 +186,39 @@ contract InvestmentManager {
                 investmentRound.maximumDailyAmount,
                 investmentRound.withdrawChance
             );
+    }
+
+    /// @notice Resets the current investment round with new parameters. This function can be used to change the parameters of the current round or to pause the contract by providing an extremely large block interval.
+    /// @dev Executing this function will block any unclaimed funds from the current round. If there are any unclaimed funds, they should be claimed before executing this function. This function does not recover the funds invested in the current round. It simply changes the parameters for future rounds. Can only be called by the investor.
+    /// @param blockInterval The interval between blocks for the new round. Must be greater than 1000.
+    /// @param minimumDailyAmount The minimum daily amount for the new round.
+    /// @param maximumDailyAmount The maximum daily amount for the new round.
+    /// @param withdrawChance The chance of withdrawing for the new round, expressed as "withdrawChance in 1000".
+    function resetInvestmentRound(
+        uint256 blockInterval,
+        uint256 minimumDailyAmount,
+        uint256 maximumDailyAmount,
+        uint256 withdrawChance
+    ) external onlyInvestor {
+        require(
+            investmentRound.zeroBlock > 0,
+            "Investment round does not exist"
+        );
+        require(blockInterval > 1000, "Block interval too small");
+        // starting from the current block
+        investmentRound.zeroBlock = block.number;
+        investmentRound.blockInterval = blockInterval;
+        investmentRound.minimumDailyAmount = minimumDailyAmount;
+        investmentRound.maximumDailyAmount = maximumDailyAmount;
+        investmentRound.withdrawChance = withdrawChance;
+        roundReplacementCounter++;
+        emit RoundReset(
+            roundReplacementCounter,
+            blockInterval,
+            minimumDailyAmount,
+            maximumDailyAmount,
+            withdrawChance
+        );
     }
 
     /// @notice Gets the hash of a specific block. Testing helper.

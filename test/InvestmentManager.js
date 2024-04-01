@@ -229,6 +229,78 @@ describe("InvestmentManager", function () {
       expect(await investmentToken.balanceOf(investmentManager)).to.equal(0);
     });
   });
+  describe("Reset Investment Round and finish it", function () {
+    it("Should complete the interrupted investment round", async function () {
+      const {
+        investmentManager,
+        investmentToken,
+        investor,
+        marketMaker,
+        helperAccount,
+      } = await loadFixture(deployManagerFixture);
+
+      await investmentToken.approve(investmentManager, TOTAL_SUPPLY);
+      // setup parameters
+      const investingAmount = ethers.parseEther("700000");
+      const oneInEight = 125; // 125/1000 = 1/8
+      // create investment round
+      await investmentManager.createInvestmentRound(
+        investingAmount, // amount,
+        BLOCKS_ETHEREUM_MINES_PER_DAY, // blockInterval,
+        ethers.parseEther("1000"), // minimumDailyAmount,
+        ethers.parseEther("159000"), // maximumDailyAmount,
+        oneInEight // withdrawChance
+      );
+      const totalPeriods = 120; // Simulate for four months
+      for (let i = 1; i <= totalPeriods / 2; i++) {
+        await mine(BLOCKS_ETHEREUM_MINES_PER_DAY);
+        // trigger random transaction to change the blockchain status and therefore the block hash
+        // this is needed to simulate the randomness of the block hash
+        await helperAccount.sendTransaction({
+          to: marketMaker.address,
+          value: ethers.parseEther("0.01"),
+        });
+
+        const availableFundsInContract = await investmentToken.balanceOf(
+          investmentManager
+        );
+        const availableFundsPerRound = await investmentManager.isBlockAvailable(
+          i
+        );
+        if (availableFundsPerRound > 0 && availableFundsInContract > 0n) {
+          await investmentManager.connect(marketMaker).withdraw(i);
+        }
+      }
+      // reset the investment round
+      await investmentManager.resetInvestmentRound(
+        BLOCKS_ETHEREUM_MINES_PER_DAY / 2,
+        ethers.parseEther("1000"),
+        ethers.parseEther("159000"),
+        oneInEight
+      );
+      for (let i = 1; i <= totalPeriods / 2; i++) {
+        await mine(BLOCKS_ETHEREUM_MINES_PER_DAY / 2);
+        await helperAccount.sendTransaction({
+          to: marketMaker.address,
+          value: ethers.parseEther("0.01"),
+        });
+
+        const availableFundsInContract = await investmentToken.balanceOf(
+          investmentManager
+        );
+        const availableFundsPerRound = await investmentManager.isBlockAvailable(
+          i
+        );
+        if (availableFundsPerRound > 0 && availableFundsInContract > 0n) {
+          await investmentManager.connect(marketMaker).withdraw(i);
+        }
+      }
+      expect(await investmentToken.balanceOf(marketMaker)).to.equal(
+        investingAmount
+      );
+      expect(await investmentToken.balanceOf(investmentManager)).to.equal(0);
+    });
+  });
 
   describe("Complete Investment Round with Mock Trader", function () {
     it("Should complete the investment round and have the reward recipient receive the reward token", async function () {
