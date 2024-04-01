@@ -12,6 +12,7 @@ contract InvestmentManager {
         uint256 minimumDailyAmount; // The minimum daily amount for an approved round.
         uint256 maximumDailyAmount; // The maximum daily amount for an approved round.
         uint256 withdrawChance; // The chance of withdrawing, expressed as "withdrawChance in 1000".
+        uint256 initialMaximumDailyAmount; // The maximum daily amount for the initial round.
         mapping(uint => mapping(uint => bool)) claimedBlockIndexes; // The indexes of the already claimed blocks.
     }
 
@@ -91,6 +92,7 @@ contract InvestmentManager {
         investmentRound.minimumDailyAmount = minimumDailyAmount;
         investmentRound.maximumDailyAmount = maximumDailyAmount;
         investmentRound.withdrawChance = withdrawChance;
+        investmentRound.initialMaximumDailyAmount = maximumDailyAmount;
     }
 
     /// @notice Calculates if tokens are to be withdrawn based on the a specific block and how many tokens should be withdrawn.
@@ -205,6 +207,14 @@ contract InvestmentManager {
             "Investment round does not exist"
         );
         require(blockInterval > 1000, "Block interval too small");
+        require(
+            maximumDailyAmount > minimumDailyAmount,
+            "Invalid daily amounts"
+        );
+        require(
+            maximumDailyAmount < investmentRound.initialMaximumDailyAmount * 5,
+            "New maximum daily amount must be less than the current maximum daily amount"
+        );
         // starting from the current block
         investmentRound.zeroBlock = block.number;
         investmentRound.blockInterval = blockInterval;
